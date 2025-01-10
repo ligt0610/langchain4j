@@ -1,5 +1,6 @@
 package dev.langchain4j.model.vertexai;
 
+import dev.langchain4j.data.document.Metadata;
 import dev.langchain4j.data.embedding.Embedding;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.embedding.EmbeddingModel;
@@ -7,34 +8,33 @@ import dev.langchain4j.model.output.Response;
 import dev.langchain4j.model.output.TokenUsage;
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.Random;
+import java.util.*;
 
+import static dev.langchain4j.model.vertexai.VertexAiEmbeddingModel.TaskType.*;
 import static java.util.Arrays.asList;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.fail;
 
 class VertexAiEmbeddingModelIT {
 
     @Test
     void testEmbeddingModel() {
         EmbeddingModel embeddingModel = VertexAiEmbeddingModel.builder()
-                .endpoint(System.getenv("GCP_VERTEXAI_ENDPOINT"))
-                .project(System.getenv("GCP_PROJECT_ID"))
-                .location(System.getenv("GCP_LOCATION"))
-                .publisher("google")
-                .modelName("textembedding-gecko@001")
-                .maxRetries(3)
-                .build();
+            .endpoint(System.getenv("GCP_VERTEXAI_ENDPOINT"))
+            .project(System.getenv("GCP_PROJECT_ID"))
+            .location(System.getenv("GCP_LOCATION"))
+            .publisher("google")
+            .modelName("textembedding-gecko@001")
+            .maxRetries(3)
+            .build();
 
         List<TextSegment> segments = asList(
-                TextSegment.from("one"),
-                TextSegment.from("two"),
-                TextSegment.from("three"),
-                TextSegment.from("four"),
-                TextSegment.from("five"),
-                TextSegment.from("six")
+            TextSegment.from("one"),
+            TextSegment.from("two"),
+            TextSegment.from("three"),
+            TextSegment.from("four"),
+            TextSegment.from("five"),
+            TextSegment.from("six")
         );
 
         Response<List<Embedding>> response = embeddingModel.embedAll(segments);
@@ -44,7 +44,6 @@ class VertexAiEmbeddingModelIT {
 
         Embedding embedding = embeddings.get(0);
         assertThat(embedding.vector()).hasSize(768);
-        System.out.println(Arrays.toString(embedding.vector()));
 
         TokenUsage tokenUsage = response.tokenUsage();
         assertThat(tokenUsage.inputTokenCount()).isEqualTo(6);
@@ -76,9 +75,8 @@ class VertexAiEmbeddingModelIT {
     @Test
     void testRandomSegments() {
         List<TextSegment> segments = createRandomSegments(10, 100);
-        System.out.println(segments);
 
-        assertThat(segments.size()).isEqualTo(10);
+        assertThat(segments).hasSize(10);
         for (TextSegment segment : segments) {
             assertThat(segment.text()).hasSizeLessThan(100);
         }
@@ -132,7 +130,7 @@ class VertexAiEmbeddingModelIT {
 
         List<Embedding> embeddings = model.embedAll(segments).content();
 
-        assertThat(embeddings.size()).isEqualTo(1234);
+        assertThat(embeddings).hasSize(1234);
     }
 
     @Test
@@ -160,6 +158,201 @@ class VertexAiEmbeddingModelIT {
 
         List<Embedding> embeddings = model.embedAll(segments).content();
 
-        assertThat(embeddings.size()).isEqualTo(1234);
+        assertThat(embeddings).hasSize(1234);
+    }
+
+    @Test
+    void testEmbeddingTask() {
+        // Semantic similarity embedding
+
+        VertexAiEmbeddingModel model = VertexAiEmbeddingModel.builder()
+            .endpoint(System.getenv("GCP_VERTEXAI_ENDPOINT"))
+            .project(System.getenv("GCP_PROJECT_ID"))
+            .location(System.getenv("GCP_LOCATION"))
+            .publisher("google")
+            .modelName("textembedding-gecko@003")
+            .maxRetries(3)
+            .taskType(SEMANTIC_SIMILARITY)
+            .build();
+
+        String text = "Embeddings for Text is the name for the model that supports text embeddings. " +
+            "Text embeddings are a NLP technique that converts textual data into numerical vectors " +
+            "that can be processed by machine learning algorithms, especially large models. `" +
+            "These vector representations are designed to capture the semantic meaning and context " +
+            "of the words they represent.";
+
+        Response<Embedding> embeddedText = model.embed(text);
+
+        assertThat(embeddedText.content().dimension()).isEqualTo(768);
+
+        // Text classification embedding
+
+        TextSegment segment2 = new TextSegment("Text Classification: Training a model that maps " +
+            "the text embeddings to the correct category labels (e.g., cat vs. dog, spam vs. not spam). " +
+            "Once the model is trained, it can be used to classify new text inputs into one or more " +
+            "categories based on their embeddings.",
+            new Metadata());
+
+        model = VertexAiEmbeddingModel.builder()
+            .endpoint(System.getenv("GCP_VERTEXAI_ENDPOINT"))
+            .project(System.getenv("GCP_PROJECT_ID"))
+            .location(System.getenv("GCP_LOCATION"))
+            .publisher("google")
+            .modelName("textembedding-gecko@003")
+            .maxRetries(3)
+            .taskType(CLASSIFICATION)
+            .build();
+
+        Response<Embedding> embeddedSegForClassif = model.embed(segment2);
+
+        assertThat(embeddedSegForClassif.content().dimension()).isEqualTo(768);
+
+        // Document retrieval embedding
+
+        Metadata metadata = new Metadata();
+        metadata.put("title", "Text embeddings");
+
+        TextSegment segmentForRetrieval = new TextSegment("Text embeddings can be used to represent both the " +
+            "user's query and the universe of documents in a high-dimensional vector space. Documents " +
+            "that are more semantically similar to the user's query will have a shorter distance in the " +
+            "vector space, and can be ranked higher in the search results.", metadata);
+
+        model = VertexAiEmbeddingModel.builder()
+            .endpoint(System.getenv("GCP_VERTEXAI_ENDPOINT"))
+            .project(System.getenv("GCP_PROJECT_ID"))
+            .location(System.getenv("GCP_LOCATION"))
+            .publisher("google")
+            .modelName("textembedding-gecko@003")
+            .maxRetries(3)
+            .taskType(RETRIEVAL_DOCUMENT)
+            .build();
+
+        Response<Embedding> embeddedSegForRetrieval = model.embed(segmentForRetrieval);
+
+        assertThat(embeddedSegForRetrieval.content().dimension()).isEqualTo(768);
+
+        // Choose a custom metadata key instead of "title"
+        // as the embedding model requires "title" to be used only for RETRIEVAL_DOCUMENT
+
+        Metadata metadataCustomTitleKey = new Metadata();
+        metadataCustomTitleKey.put("customTitle", "Text embeddings");
+
+        TextSegment segmentForRetrievalWithCustomKey = new TextSegment("Text embeddings can be used to represent both the " +
+            "user's query and the universe of documents in a high-dimensional vector space. Documents " +
+            "that are more semantically similar to the user's query will have a shorter distance in the " +
+            "vector space, and can be ranked higher in the search results.", metadataCustomTitleKey);
+
+        model = VertexAiEmbeddingModel.builder()
+            .endpoint(System.getenv("GCP_VERTEXAI_ENDPOINT"))
+            .project(System.getenv("GCP_PROJECT_ID"))
+            .location(System.getenv("GCP_LOCATION"))
+            .publisher("google")
+            .modelName("textembedding-gecko@003")
+            .maxRetries(3)
+            .taskType(RETRIEVAL_DOCUMENT)
+            .titleMetadataKey("customTitle")
+            .build();
+
+        Response<Embedding> embeddedSegForRetrievalWithCustomKey = model.embed(segmentForRetrievalWithCustomKey);
+
+        assertThat(embeddedSegForRetrievalWithCustomKey.content().dimension()).isEqualTo(768);
+
+        // Check we can use "title" metadata when not using RETRIEVAL_DOCUMENT task
+
+        model = VertexAiEmbeddingModel.builder()
+            .endpoint(System.getenv("GCP_VERTEXAI_ENDPOINT"))
+            .project(System.getenv("GCP_PROJECT_ID"))
+            .location(System.getenv("GCP_LOCATION"))
+            .publisher("google")
+            .modelName("textembedding-gecko@003")
+            .maxRetries(3)
+            .titleMetadataKey("customTitle")
+            .build();
+
+        Response<Embedding> embeddedSegTitleKeyNoRetrieval = model.embed(segmentForRetrieval);
+
+        assertThat(embeddedSegTitleKeyNoRetrieval.content().dimension()).isEqualTo(768);
+
+        // Check the code retrieval query task
+
+        model = VertexAiEmbeddingModel.builder()
+            .endpoint(System.getenv("GCP_VERTEXAI_ENDPOINT"))
+            .project(System.getenv("GCP_PROJECT_ID"))
+            .location(System.getenv("GCP_LOCATION"))
+            .publisher("google")
+            .modelName("text-embedding-preview-0815")
+            .maxRetries(3)
+            .taskType(CODE_RETRIEVAL_QUERY)
+            .build();
+
+        Response<Embedding> codeRetrivalQuery = model.embed(TextSegment.from(
+            "        List<Double> distances = (List<Double>) _calculateCosineDistances(sentences)[0];\n" +
+            "        sentences = (List<Sentence>) _calculateCosineDistances(sentences)[1];\n" +
+            "\n" +
+            "        int breakpointPercentileThreshold = 65;\n" +
+            "        Percentile percentile = new Percentile();\n" +
+            "        percentile.setData(Doubles.toArray(distances));\n" +
+            "        double breakpointDistanceThreshold = percentile.evaluate(breakpointPercentileThreshold);"));
+
+        assertThat(codeRetrivalQuery.content().dimension()).isEqualTo(768);
+    }
+
+    @Test
+    void testOutputDimensionality() {
+        VertexAiEmbeddingModel model = VertexAiEmbeddingModel.builder()
+            .project(System.getenv("GCP_PROJECT_ID"))
+            .location(System.getenv("GCP_LOCATION"))
+            .publisher("google")
+            .modelName("text-embedding-004")
+            .maxRetries(3)
+            .outputDimensionality(128)
+            .build();
+
+        Response<Embedding> response = model.embed("Hello, how are you?");
+
+        assertThat(response.content().dimension()).isEqualTo(128);
+    }
+
+    @Test
+    void testAutoTruncate() {
+        // without auto truncation
+        VertexAiEmbeddingModel model = VertexAiEmbeddingModel.builder()
+            .project(System.getenv("GCP_PROJECT_ID"))
+            .location(System.getenv("GCP_LOCATION"))
+            .publisher("google")
+            .modelName("text-embedding-004")
+            .maxRetries(1)
+            .autoTruncate(false)
+            .build();
+
+        // create a long string that amounts to 6000 tokens, vs the allowed maximum of 2048 tokens
+        StringBuilder veryLongString = new StringBuilder();
+        for (int i = 0; i < 1000; i++) {
+            veryLongString.append("a very long message, ");
+        }
+
+        try {
+            model.embed(veryLongString.toString());
+            fail("The model should have thrown an exception because the string is too long");
+        } catch (Exception e) {
+            // expected
+        }
+
+        // with auto truncation
+        model = VertexAiEmbeddingModel.builder()
+            .endpoint(System.getenv("GCP_VERTEXAI_ENDPOINT"))
+            .project(System.getenv("GCP_PROJECT_ID"))
+            .location(System.getenv("GCP_LOCATION"))
+            .publisher("google")
+            .modelName("text-embedding-004")
+            .maxRetries(3)
+            .autoTruncate(true)
+            .build();
+
+        // no exception is thrown, because the input was auto truncated
+        Response<Embedding> embeddingResponse = model.embed(veryLongString.toString());
+
+        // 6000 input tokens, but only 2048 were really used to calculate the vector embedding
+        assertThat(embeddingResponse.tokenUsage().inputTokenCount()).isEqualTo(6000);
     }
 }

@@ -1,18 +1,21 @@
 package dev.langchain4j.rag.content.injector;
 
 import dev.langchain4j.data.document.Metadata;
+import dev.langchain4j.data.message.ChatMessage;
 import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.input.Prompt;
 import dev.langchain4j.model.input.PromptTemplate;
 import dev.langchain4j.rag.content.Content;
-import lombok.Builder;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static dev.langchain4j.internal.Utils.*;
+import static dev.langchain4j.internal.Utils.copyIfNotNull;
+import static dev.langchain4j.internal.Utils.getOrDefault;
+import static dev.langchain4j.internal.Utils.isNotNullOrBlank;
+import static dev.langchain4j.internal.Utils.isNullOrEmpty;
 import static dev.langchain4j.internal.ValidationUtils.ensureNotEmpty;
 import static dev.langchain4j.internal.ValidationUtils.ensureNotNull;
 import static java.util.stream.Collectors.joining;
@@ -36,6 +39,7 @@ import static java.util.stream.Collectors.joining;
  * <br>
  * - {@link #promptTemplate}: The prompt template that defines how the original {@code userMessage}
  * and {@code contents} are combined into the resulting {@link UserMessage}.
+ * The text of the template should contain the {@code {{userMessage}}} and {@code {{contents}}} variables.
  * <br>
  * - {@link #metadataKeysToInclude}: A list of {@link Metadata} keys that should be included
  * with each {@link Content#textSegment()}.
@@ -43,10 +47,11 @@ import static java.util.stream.Collectors.joining;
 public class DefaultContentInjector implements ContentInjector {
 
     public static final PromptTemplate DEFAULT_PROMPT_TEMPLATE = PromptTemplate.from(
-            "{{userMessage}}\n" +
-                    "\n" +
-                    "Answer using the following information:\n" +
-                    "{{contents}}"
+            """
+                    {{userMessage}}
+                    
+                    Answer using the following information:
+                    {{contents}}"""
     );
 
     private final PromptTemplate promptTemplate;
@@ -64,13 +69,39 @@ public class DefaultContentInjector implements ContentInjector {
         this(ensureNotNull(promptTemplate, "promptTemplate"), null);
     }
 
-    @Builder
     public DefaultContentInjector(PromptTemplate promptTemplate, List<String> metadataKeysToInclude) {
         this.promptTemplate = getOrDefault(promptTemplate, DEFAULT_PROMPT_TEMPLATE);
         this.metadataKeysToInclude = copyIfNotNull(metadataKeysToInclude);
     }
 
+    public static DefaultContentInjectorBuilder builder() {
+        return new DefaultContentInjectorBuilder();
+    }
+
     @Override
+    public ChatMessage inject(List<Content> contents, ChatMessage chatMessage) {
+
+        if (contents.isEmpty()) {
+            return chatMessage;
+        }
+
+        Prompt prompt = createPrompt(chatMessage, contents);
+        if (chatMessage instanceof UserMessage message && isNotNullOrBlank(message.name())) {
+            return prompt.toUserMessage(message.name());
+        }
+
+        return prompt.toUserMessage();
+    }
+
+    protected Prompt createPrompt(ChatMessage chatMessage, List<Content> contents) {
+        return createPrompt((UserMessage) chatMessage, contents);
+    }
+
+    /**
+     * @deprecated use {@link #inject(List, ChatMessage)} instead.
+     */
+    @Override
+    @Deprecated
     public UserMessage inject(List<Content> contents, UserMessage userMessage) {
 
         if (contents.isEmpty()) {
@@ -78,9 +109,16 @@ public class DefaultContentInjector implements ContentInjector {
         }
 
         Prompt prompt = createPrompt(userMessage, contents);
+        if (isNotNullOrBlank(userMessage.name())) {
+            return prompt.toUserMessage(userMessage.name());
+        }
         return prompt.toUserMessage();
     }
 
+    /**
+     * @deprecated implement/override {@link #createPrompt(ChatMessage, List)} instead.
+     */
+    @Deprecated
     protected Prompt createPrompt(UserMessage userMessage, List<Content> contents) {
         Map<String, Object> variables = new HashMap<>();
         variables.put("userMessage", userMessage.text());
@@ -126,5 +164,31 @@ public class DefaultContentInjector implements ContentInjector {
         return segmentMetadata.isEmpty()
                 ? segmentContent
                 : String.format("content: %s\n%s", segmentContent, segmentMetadata);
+    }
+
+    public static class DefaultContentInjectorBuilder {
+        private PromptTemplate promptTemplate;
+        private List<String> metadataKeysToInclude;
+
+        DefaultContentInjectorBuilder() {
+        }
+
+        public DefaultContentInjectorBuilder promptTemplate(PromptTemplate promptTemplate) {
+            this.promptTemplate = promptTemplate;
+            return this;
+        }
+
+        public DefaultContentInjectorBuilder metadataKeysToInclude(List<String> metadataKeysToInclude) {
+            this.metadataKeysToInclude = metadataKeysToInclude;
+            return this;
+        }
+
+        public DefaultContentInjector build() {
+            return new DefaultContentInjector(this.promptTemplate, this.metadataKeysToInclude);
+        }
+
+        public String toString() {
+            return "DefaultContentInjector.DefaultContentInjectorBuilder(promptTemplate=" + this.promptTemplate + ", metadataKeysToInclude=" + this.metadataKeysToInclude + ")";
+        }
     }
 }

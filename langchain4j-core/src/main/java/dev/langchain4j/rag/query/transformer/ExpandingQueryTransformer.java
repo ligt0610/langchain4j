@@ -5,7 +5,6 @@ import dev.langchain4j.model.chat.ChatLanguageModel;
 import dev.langchain4j.model.input.Prompt;
 import dev.langchain4j.model.input.PromptTemplate;
 import dev.langchain4j.rag.query.Query;
-import lombok.Builder;
 
 import java.util.Collection;
 import java.util.HashMap;
@@ -36,19 +35,20 @@ import static java.util.stream.Collectors.toList;
 public class ExpandingQueryTransformer implements QueryTransformer {
 
     public static final PromptTemplate DEFAULT_PROMPT_TEMPLATE = PromptTemplate.from(
-            "Generate {{n}} different versions of a provided user query. " +
-                    "Each version should be worded differently, using synonyms or alternative sentence structures, " +
-                    "but they should all retain the original meaning. " +
-                    "These versions will be used to retrieve relevant documents. " +
-                    "It is very important to provide each query version on a separate line, " +
-                    "without enumerations, hyphens, or any additional formatting!\n" +
-                    "User query: {{query}}"
+            """
+                    Generate {{n}} different versions of a provided user query. \
+                    Each version should be worded differently, using synonyms or alternative sentence structures, \
+                    but they should all retain the original meaning. \
+                    These versions will be used to retrieve relevant documents. \
+                    It is very important to provide each query version on a separate line, \
+                    without enumerations, hyphens, or any additional formatting!
+                    User query: {{query}}"""
     );
     public static final int DEFAULT_N = 3;
 
-    private final ChatLanguageModel chatLanguageModel;
-    private final PromptTemplate promptTemplate;
-    private final int n;
+    protected final ChatLanguageModel chatLanguageModel;
+    protected final PromptTemplate promptTemplate;
+    protected final int n;
 
     public ExpandingQueryTransformer(ChatLanguageModel chatLanguageModel) {
         this(chatLanguageModel, DEFAULT_PROMPT_TEMPLATE, DEFAULT_N);
@@ -62,19 +62,26 @@ public class ExpandingQueryTransformer implements QueryTransformer {
         this(chatLanguageModel, ensureNotNull(promptTemplate, "promptTemplate"), DEFAULT_N);
     }
 
-    @Builder
     public ExpandingQueryTransformer(ChatLanguageModel chatLanguageModel, PromptTemplate promptTemplate, Integer n) {
         this.chatLanguageModel = ensureNotNull(chatLanguageModel, "chatLanguageModel");
         this.promptTemplate = getOrDefault(promptTemplate, DEFAULT_PROMPT_TEMPLATE);
         this.n = ensureGreaterThanZero(getOrDefault(n, DEFAULT_N), "n");
     }
 
+    public static ExpandingQueryTransformerBuilder builder() {
+        return new ExpandingQueryTransformerBuilder();
+    }
+
     @Override
     public Collection<Query> transform(Query query) {
         Prompt prompt = createPrompt(query);
         String response = chatLanguageModel.generate(prompt.text());
-        List<Query> queries = parse(response);
-        return queries;
+        List<String> queries = parse(response);
+        return queries.stream()
+                .map(queryText -> query.metadata() == null
+                        ? Query.from(queryText)
+                        : Query.from(queryText, query.metadata()))
+                .collect(toList());
     }
 
     protected Prompt createPrompt(Query query) {
@@ -84,10 +91,41 @@ public class ExpandingQueryTransformer implements QueryTransformer {
         return promptTemplate.apply(variables);
     }
 
-    protected List<Query> parse(String queries) {
+    protected List<String> parse(String queries) {
         return stream(queries.split("\n"))
                 .filter(Utils::isNotNullOrBlank)
-                .map(Query::from)
                 .collect(toList());
+    }
+
+    public static class ExpandingQueryTransformerBuilder {
+        private ChatLanguageModel chatLanguageModel;
+        private PromptTemplate promptTemplate;
+        private Integer n;
+
+        ExpandingQueryTransformerBuilder() {
+        }
+
+        public ExpandingQueryTransformerBuilder chatLanguageModel(ChatLanguageModel chatLanguageModel) {
+            this.chatLanguageModel = chatLanguageModel;
+            return this;
+        }
+
+        public ExpandingQueryTransformerBuilder promptTemplate(PromptTemplate promptTemplate) {
+            this.promptTemplate = promptTemplate;
+            return this;
+        }
+
+        public ExpandingQueryTransformerBuilder n(Integer n) {
+            this.n = n;
+            return this;
+        }
+
+        public ExpandingQueryTransformer build() {
+            return new ExpandingQueryTransformer(this.chatLanguageModel, this.promptTemplate, this.n);
+        }
+
+        public String toString() {
+            return "ExpandingQueryTransformer.ExpandingQueryTransformerBuilder(chatLanguageModel=" + this.chatLanguageModel + ", promptTemplate=" + this.promptTemplate + ", n=" + this.n + ")";
+        }
     }
 }

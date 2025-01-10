@@ -9,16 +9,22 @@ import org.junit.jupiter.params.provider.MethodSource;
 import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.InetSocketAddress;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Stream;
 
 import static dev.langchain4j.internal.Utils.quoted;
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
+import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonList;
+import static java.util.Collections.singletonMap;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.assertj.core.api.Assertions.entry;
 
 @SuppressWarnings({"ObviousNullCheck", "ConstantValue"})
 class UtilsTest {
@@ -29,6 +35,48 @@ class UtilsTest {
 
         assertThat(Utils.getOrDefault("foo", () -> "bar")).isEqualTo("foo");
         assertThat(Utils.getOrDefault(null, () -> "bar")).isEqualTo("bar");
+    }
+
+    @Test
+    void test_getOrDefault_List() {
+        List<Integer> nullList = null;
+        List<Integer> emptyList = List.of();
+        List<Integer> list1 = List.of(1);
+        List<Integer> list2 = List.of(2);
+
+        assertThat(Utils.getOrDefault(nullList, nullList)).isSameAs(nullList);
+        assertThat(Utils.getOrDefault(nullList, emptyList)).isSameAs(emptyList);
+
+        assertThat(Utils.getOrDefault(emptyList, nullList)).isSameAs(nullList);
+        assertThat(Utils.getOrDefault(emptyList, emptyList)).isSameAs(emptyList);
+
+        assertThat(Utils.getOrDefault(nullList, list1)).isSameAs(list1);
+        assertThat(Utils.getOrDefault(emptyList, list1)).isSameAs(list1);
+
+        assertThat(Utils.getOrDefault(list1, list2))
+                .isSameAs(list1)
+                .isNotSameAs(list2);
+    }
+
+    @Test
+    void test_getOrDefault_Map() {
+        Map<String, String> nullMap = null;
+        Map<String, String> emptyMap = Map.of();
+        Map<String, String> map1 = Map.of("one", "1");
+        Map<String, String> map2 = Map.of("two", "2");
+
+        assertThat(Utils.getOrDefault(nullMap, nullMap)).isSameAs(nullMap);
+        assertThat(Utils.getOrDefault(nullMap, emptyMap)).isSameAs(emptyMap);
+
+        assertThat(Utils.getOrDefault(emptyMap, nullMap)).isSameAs(nullMap);
+        assertThat(Utils.getOrDefault(emptyMap, emptyMap)).isSameAs(emptyMap);
+
+        assertThat(Utils.getOrDefault(nullMap, map1)).isSameAs(map1);
+        assertThat(Utils.getOrDefault(emptyMap, map1)).isSameAs(map1);
+
+        assertThat(Utils.getOrDefault(map1, map2))
+                .isSameAs(map1)
+                .isNotSameAs(map2);
     }
 
     @Test
@@ -45,6 +93,24 @@ class UtilsTest {
     }
 
     @Test
+    public void test_string_isNullOrEmpty() {
+        assertThat(Utils.isNullOrEmpty((String) null)).isTrue();
+        assertThat(Utils.isNullOrEmpty("")).isTrue();
+        assertThat(Utils.isNullOrEmpty(" ")).isFalse();
+        assertThat(Utils.isNullOrEmpty("\n")).isFalse();
+        assertThat(Utils.isNullOrEmpty("foo")).isFalse();
+    }
+
+    @Test
+    public void test_string_isNotNullOrEmpty() {
+        assertThat(Utils.isNotNullOrEmpty(null)).isFalse();
+        assertThat(Utils.isNotNullOrEmpty("")).isFalse();
+        assertThat(Utils.isNotNullOrEmpty(" ")).isTrue();
+        assertThat(Utils.isNotNullOrEmpty("\n")).isTrue();
+        assertThat(Utils.isNotNullOrEmpty("foo")).isTrue();
+    }
+
+    @Test
     public void test_areNotNullOrBlank() {
         assertThat(Utils.areNotNullOrBlank()).isFalse();
         assertThat(Utils.areNotNullOrBlank((String) null)).isFalse();
@@ -58,10 +124,17 @@ class UtilsTest {
     }
 
     @Test
-    public void test_isNullOrEmpty() {
-        assertThat(Utils.isNullOrEmpty(null)).isTrue();
+    public void test_collection_isNullOrEmpty() {
+        assertThat(Utils.isNullOrEmpty((Collection<?>) null)).isTrue();
         assertThat(Utils.isNullOrEmpty(emptyList())).isTrue();
         assertThat(Utils.isNullOrEmpty(Collections.singletonList("abc"))).isFalse();
+    }
+
+    @Test
+    public void test_iterable_isNullOrEmpty() {
+        assertThat(Utils.isNullOrEmpty((Iterable<?>) null)).isTrue();
+        assertThat(Utils.isNullOrEmpty((Iterable<?>) emptyList())).isTrue();
+        assertThat(Utils.isNullOrEmpty((Iterable<?>) Collections.singletonList("abc"))).isFalse();
     }
 
     @Test
@@ -74,7 +147,7 @@ class UtilsTest {
 
     @Test
     public void test_repeat() {
-        assertThat(Utils.repeat("foo", 0)).isEqualTo("");
+        assertThat(Utils.repeat("foo", 0)).isEmpty();
         assertThat(Utils.repeat("foo", 1)).isEqualTo("foo");
         assertThat(Utils.repeat("foo", 2)).isEqualTo("foofoo");
         assertThat(Utils.repeat("foo", 3)).isEqualTo("foofoofoo");
@@ -189,10 +262,26 @@ class UtilsTest {
     }
 
     @Test
-    void test_copyIfNotNull() {
-        assertThat(Utils.copyIfNotNull(null)).isNull();
+    void test_copyIfNotNull_List() {
+        assertThat(Utils.copyIfNotNull((List<?>) null)).isNull();
         assertThat(Utils.copyIfNotNull(emptyList())).isEmpty();
         assertThat(Utils.copyIfNotNull(singletonList("one"))).containsExactly("one");
         assertThat(Utils.copyIfNotNull(asList("one", "two"))).containsExactly("one", "two");
+    }
+
+    @Test
+    void test_copyIfNotNull_Map() {
+        assertThat(Utils.copyIfNotNull((Map<?, ?>)null)).isNull();
+        assertThat(Utils.copyIfNotNull(emptyMap())).isEmpty();
+        assertThat(Utils.copyIfNotNull(singletonMap("key", "value"))).containsExactly(entry("key", "value"));
+    }
+
+    @Test
+    void test_ensureTrailingForwardSlash() {
+        assertThat(Utils.ensureTrailingForwardSlash("https://example.com")).isEqualTo("https://example.com/");
+        assertThat(Utils.ensureTrailingForwardSlash("https://example.com/")).isEqualTo("https://example.com/");
+        assertThat(Utils.ensureTrailingForwardSlash("https://example.com/a")).isEqualTo("https://example.com/a/");
+        assertThat(Utils.ensureTrailingForwardSlash("https://example.com/a/")).isEqualTo("https://example.com/a/");
+        assertThat(Utils.ensureTrailingForwardSlash("https://example.com/a/b")).isEqualTo("https://example.com/a/b/");
     }
 }

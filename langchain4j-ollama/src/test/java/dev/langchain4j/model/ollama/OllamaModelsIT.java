@@ -1,16 +1,20 @@
 package dev.langchain4j.model.ollama;
 
+import dev.langchain4j.model.chat.ChatLanguageModel;
 import dev.langchain4j.model.output.Response;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 
+import static dev.langchain4j.model.ollama.OllamaImage.TINY_DOLPHIN_MODEL;
 import static org.assertj.core.api.Assertions.assertThat;
 
-class OllamaModelsIT extends AbstractOllamaInfrastructure {
+class OllamaModelsIT extends AbstractOllamaLanguageModelInfrastructure {
 
     OllamaModels ollamaModels = OllamaModels.builder()
-            .baseUrl(getBaseUrl())
+            .baseUrl(ollamaBaseUrl(ollama))
+            .logRequests(true)
+            .logResponses(true)
             .build();
 
     @Test
@@ -21,8 +25,16 @@ class OllamaModelsIT extends AbstractOllamaInfrastructure {
         Response<List<OllamaModel>> response = ollamaModels.availableModels();
 
         // then
-        assertThat(response.content().size()).isGreaterThan(0);
-        assertThat(response.content().get(0).getName()).isEqualTo("phi:latest");
+        List<OllamaModel> ollamaModels = response.content();
+        assertThat(ollamaModels).isNotEmpty();
+        for (OllamaModel ollamaModel : ollamaModels) {
+            assertThat(ollamaModel.getName()).isNotBlank();
+            assertThat(ollamaModel.getSize()).isPositive();
+            assertThat(ollamaModel.getDigest()).isNotBlank();
+            assertThat(ollamaModel.getDetails()).isNotNull(); // TODO assert internals
+            assertThat(ollamaModel.getModel()).isNotBlank();
+            assertThat(ollamaModel.getModifiedAt()).isNotNull();
+        }
     }
 
     @Test
@@ -31,7 +43,7 @@ class OllamaModelsIT extends AbstractOllamaInfrastructure {
 
         // when
         OllamaModel ollamaModel = OllamaModel.builder()
-                .name("phi:latest")
+                .name(TINY_DOLPHIN_MODEL)
                 .build();
 
         Response<OllamaModelCard> response = ollamaModels.modelCard(ollamaModel);
@@ -40,7 +52,8 @@ class OllamaModelsIT extends AbstractOllamaInfrastructure {
         assertThat(response.content().getModelfile()).isNotBlank();
         assertThat(response.content().getTemplate()).isNotBlank();
         assertThat(response.content().getParameters()).isNotBlank();
-        assertThat(response.content().getDetails().getFamily()).isEqualTo("phi2");
+        assertThat(response.content().getModifiedAt()).isNotNull();
+        assertThat(response.content().getDetails().getFamily()).isEqualTo("llama");
     }
 
     @Test
@@ -48,13 +61,39 @@ class OllamaModelsIT extends AbstractOllamaInfrastructure {
         // given AbstractOllamaInfrastructure
 
         // when
-        Response<OllamaModelCard> response = ollamaModels.modelCard("phi:latest");
+        Response<OllamaModelCard> response = ollamaModels.modelCard(TINY_DOLPHIN_MODEL);
 
         // then
         assertThat(response.content().getModelfile()).isNotBlank();
         assertThat(response.content().getTemplate()).isNotBlank();
         assertThat(response.content().getParameters()).isNotBlank();
-        assertThat(response.content().getDetails().getFamily()).isEqualTo("phi2");
+        assertThat(response.content().getModifiedAt()).isNotNull();
+        assertThat(response.content().getModelInfo().keySet().size()).isPositive();
+        assertThat(response.content().getModelInfo()).containsKey("general.architecture");
+        assertThat(response.content().getDetails().getFamily()).isEqualTo("llama");
     }
 
+    @Test
+    void should_return_list_of_running_models() {
+        // given AbstractOllamaInfrastructure
+
+        // load model
+        ChatLanguageModel model = OllamaChatModel.builder()
+                .baseUrl(ollamaBaseUrl(ollama))
+                .modelName(TINY_DOLPHIN_MODEL)
+                .temperature(0.0)
+                .numPredict(1)
+                .build();
+        model.generate("Tell a joke");
+
+        // when
+        Response<List<RunningOllamaModel>> response = ollamaModels.runningModels();
+
+        // then
+        RunningOllamaModel runningOllamaModel = response.content().get(0);
+
+        assertThat(runningOllamaModel.getName()).contains(TINY_DOLPHIN_MODEL);
+        assertThat(runningOllamaModel.getDigest()).isNotBlank();
+        assertThat(runningOllamaModel.getExpiresAt()).isNotNull();
+    }
 }

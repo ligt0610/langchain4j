@@ -43,32 +43,33 @@ class CompressingQueryTransformerTest {
 
         Query query = Query.from(userMessage.text(), metadata);
 
-        String expectedResultingQuery = "How old is Klaus Heisler?";
+        String expectedCompressedQuery = "How old is Klaus Heisler?";
 
-        ChatModelMock model = ChatModelMock.thatAlwaysResponds(expectedResultingQuery);
+        ChatModelMock model = ChatModelMock.thatAlwaysResponds(expectedCompressedQuery);
         CompressingQueryTransformer transformer = new CompressingQueryTransformer(model);
 
         // when
         Collection<Query> queries = transformer.transform(query);
 
         // then
-        assertThat(queries).containsExactly(Query.from(expectedResultingQuery));
+        assertThat(queries).containsExactly(Query.from(expectedCompressedQuery, metadata));
 
         assertThat(model.userMessageText()).isEqualTo(
-                "Read and understand the conversation between the User and the AI. " +
-                        "Then, analyze the new query from the User. " +
-                        "Identify all relevant details, terms, and context from both the conversation " +
-                        "and the new query. Reformulate this query into a clear, concise, " +
-                        "and self-contained format suitable for information retrieval.\n" +
-                        "\n" +
-                        "Conversation:\n" +
-                        "User: Tell me about Klaus Heisler\n" +
-                        "AI: He is a cool guy\n" +
-                        "\n" +
-                        "User query: How old is he?\n" +
-                        "\n" +
-                        "It is very important that you provide only reformulated query and nothing else! " +
-                        "Do not prepend a query with anything!"
+                """
+                Read and understand the conversation between the User and the AI. \
+                Then, analyze the new query from the User. \
+                Identify all relevant details, terms, and context from both the conversation \
+                and the new query. Reformulate this query into a clear, concise, \
+                and self-contained format suitable for information retrieval.
+                
+                Conversation:
+                User: Tell me about Klaus Heisler
+                AI: He is a cool guy
+                
+                User query: How old is he?
+                
+                It is very important that you provide only reformulated query and nothing else! \
+                Do not prepend a query with anything!"""
         );
     }
 
@@ -110,8 +111,8 @@ class CompressingQueryTransformerTest {
         Metadata metadata = Metadata.from(userMessage, "default", chatMemory);
         Query query = Query.from(userMessage.text(), metadata);
 
-        String expectedResultingQuery = "How old is Klaus Heisler?";
-        ChatModelMock model = ChatModelMock.thatAlwaysResponds(expectedResultingQuery);
+        String expectedCompressedQuery = "How old is Klaus Heisler?";
+        ChatModelMock model = ChatModelMock.thatAlwaysResponds(expectedCompressedQuery);
 
         CompressingQueryTransformer transformer = new CompressingQueryTransformer(model, promptTemplate);
 
@@ -119,13 +120,14 @@ class CompressingQueryTransformerTest {
         Collection<Query> queries = transformer.transform(query);
 
         // then
-        assertThat(queries).containsExactly(Query.from(expectedResultingQuery));
+        assertThat(queries).containsExactly(Query.from(expectedCompressedQuery, metadata));
 
         assertThat(model.userMessageText()).isEqualTo(
-                "Given the following conversation: " +
-                        "User: Tell me about Klaus Heisler\n" +
-                        "AI: He is a cool guy " +
-                        "reformulate the following query: How old is he?"
+                """
+                Given the following conversation: \
+                User: Tell me about Klaus Heisler
+                AI: He is a cool guy \
+                reformulate the following query: How old is he?"""
         );
     }
 
@@ -144,8 +146,8 @@ class CompressingQueryTransformerTest {
         Metadata metadata = Metadata.from(userMessage, "default", chatMemory);
         Query query = Query.from(userMessage.text(), metadata);
 
-        String expectedResultingQuery = "How old is Klaus Heisler?";
-        ChatModelMock model = ChatModelMock.thatAlwaysResponds(expectedResultingQuery);
+        String expectedCompressedQuery = "How old is Klaus Heisler?";
+        ChatModelMock model = ChatModelMock.thatAlwaysResponds(expectedCompressedQuery);
 
         CompressingQueryTransformer transformer = CompressingQueryTransformer.builder()
                 .chatLanguageModel(model)
@@ -156,13 +158,14 @@ class CompressingQueryTransformerTest {
         Collection<Query> queries = transformer.transform(query);
 
         // then
-        assertThat(queries).containsExactly(Query.from(expectedResultingQuery));
+        assertThat(queries).containsExactly(Query.from(expectedCompressedQuery, metadata));
 
         assertThat(model.userMessageText()).isEqualTo(
-                "Given the following conversation: " +
-                        "User: Tell me about Klaus Heisler\n" +
-                        "AI: He is a cool guy " +
-                        "reformulate the following query: How old is he?"
+                """
+                Given the following conversation: \
+                User: Tell me about Klaus Heisler
+                AI: He is a cool guy \
+                reformulate the following query: How old is he?"""
         );
     }
 }

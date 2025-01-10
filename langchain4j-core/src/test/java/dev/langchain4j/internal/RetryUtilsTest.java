@@ -6,7 +6,11 @@ import java.util.concurrent.Callable;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.mockito.Mockito.when;
 
 class RetryUtilsTest {
     @Test
@@ -104,6 +108,38 @@ class RetryUtilsTest {
         assertThatThrownBy(() -> policy.withRetry(mockAction, 3))
                 .isInstanceOf(RuntimeException.class);
         verify(mockAction, times(3)).call();
+        verifyNoMoreInteractions(mockAction);
+    }
+
+    @Test
+    void testZeroAttemptsReached() throws Exception {
+        @SuppressWarnings("unchecked")
+        Callable<String> mockAction = mock(Callable.class);
+        when(mockAction.call()).thenThrow(new RuntimeException());
+
+        RetryUtils.RetryPolicy policy = RetryUtils.retryPolicyBuilder()
+                .delayMillis(100)
+                .build();
+
+        assertThatThrownBy(() -> policy.withRetry(mockAction, 0))
+                .isInstanceOf(RuntimeException.class);
+        verify(mockAction, times(1)).call();
+        verifyNoMoreInteractions(mockAction);
+    }
+
+    @Test
+    void testIllegalAttemptsReached() throws Exception {
+        @SuppressWarnings("unchecked")
+        Callable<String> mockAction = mock(Callable.class);
+        when(mockAction.call()).thenThrow(new RuntimeException());
+
+        RetryUtils.RetryPolicy policy = RetryUtils.retryPolicyBuilder()
+                .delayMillis(100)
+                .build();
+
+        assertThatThrownBy(() -> policy.withRetry(mockAction, -1))
+                .isInstanceOf(RuntimeException.class);
+        verify(mockAction, times(1)).call();
         verifyNoMoreInteractions(mockAction);
     }
 }
